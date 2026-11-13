@@ -638,7 +638,9 @@ terminal_header <- data.frame(group = header_group, variant = factor(rev(levels(
 terminal_plot <- ggplot(terminal, aes(y = variant)) +
   geom_linerange(aes(xmin = 100 * observed_lower, xmax = 100 * observed_upper, colour = group), linewidth = lw(0.75), na.rm = TRUE) +
   geom_point(aes(x = 100 * observed_fraction, shape = variant, colour = group), fill = "white", size = 1.4, na.rm = TRUE) +
-  geom_point(aes(x = 100 * expected_fraction), shape = 124, size = 2.2, colour = ink, na.rm = TRUE) +
+  # The expected share is a drawn tick (a character shape would use the device font, not Arial).
+  geom_segment(aes(x = 100 * expected_fraction, xend = 100 * expected_fraction, y = as.numeric(variant) - 0.32, yend = as.numeric(variant) + 0.32),
+               colour = ink, linewidth = lw(0.75), na.rm = TRUE) +
   geom_text(aes(x = 106, label = kn_label), hjust = 0, size = fs(dense_pt)) +
   geom_text(aes(x = 138, label = oe_label, colour = I(oe_colour)), hjust = 0, size = fs(dense_pt)) +
   geom_text(data = terminal_header, aes(x = 106, y = 4.85, label = "k/n"), hjust = 0, size = fs(dense_pt), fontface = "bold") +
