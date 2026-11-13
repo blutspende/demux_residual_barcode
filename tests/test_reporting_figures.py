@@ -11,7 +11,9 @@ import reporting_fixture
 from test_reporting_reports import report_inputs
 from database_residue_screen.contracts import ContractError, read_table
 from database_residue_screen.outcomes import OUTCOME_SCHEMA
-from database_residue_screen.reporting.figure_sources import CONTRACT, alignment_quality, build_figure_sources, rule_testable_parents
+from database_residue_screen.precision import relative_entropy_limits
+from database_residue_screen.reporting.figure_sources import (CONTRACT, EVIDENCE_STATES, alignment_quality, build_figure_sources, evidence_state,
+                                                              rule_testable_parents)
 from database_residue_screen.reporting.figures import build_figures
 from database_residue_screen.reporting.metrics import compute_metrics, read_logical, read_statuses
 from database_residue_screen.reporting.reports import build_reports
@@ -68,7 +70,7 @@ class FigureSourceTests(FigureSourceCase):
                     "precision.tsv", "precision_fixed_cohort.tsv", "matching_examples.tsv", "benchmark_metrics.tsv",
                     "short_query_detectability.tsv", "length_testability.tsv", "density.tsv", "logical_queries.tsv", "testability_classes.tsv",
                     "record_cases.tsv", "record_case_segments.tsv", "record_case_verification.tsv", "target_limit_summary.tsv",
-                    "target_limit_parents.tsv"}
+                    "target_limit_parents.tsv", "evidence_states.tsv"}
         self.assertEqual(set(manifest["files"]), expected)
         self.assertFalse({"pilot_common_summary.tsv", "u01_case_verification.tsv"} & set(manifest["files"]))
 
@@ -83,6 +85,45 @@ class FigureSourceTests(FigureSourceCase):
             source = metrics[tuple(row[name] for name in key)]
             self.assertEqual((row["eligible_parents"], row["reference_positive"], row["control_positive"]),
                              (source["eligible_parents"], source["reference_positive"], source["control_positive"]))
+            draws, positive = int(row["control_draws"]), int(row["control_positive"])
+            if draws:
+                lower, upper = relative_entropy_limits(positive / draws, draws, 0.05 / 3)
+                self.assertAlmostEqual(float(row["control_lower"]), lower)
+                self.assertAlmostEqual(float(row["control_upper"]), upper)
+                self.assertLessEqual(float(row["control_lower"]), positive / draws)
+                self.assertGreaterEqual(float(row["control_upper"]), positive / draws)
+            else:
+                self.assertEqual((row["control_lower"], row["control_upper"]), ("not_estimated", "not_estimated"))
+
+    def test_evidence_states_partition_the_parents(self):
+        states = table(self.sources / "evidence_states.tsv")
+        manifest = json.loads((self.sources / "manifest.json").read_text())
+        testable_states = {"raw_zero", "endpoint_non_positive", "cap_limited_non_positive", "detection_unresolved",
+                           "positive_unresolved_breadth", "identified_positive"}
+        for rule in ("strict", "tolerant"):
+            rows = [row for row in states if row["rule"] == rule]
+            self.assertEqual([row["state"] for row in rows], list(EVIDENCE_STATES))
+            self.assertEqual(sum(int(row["parents"]) for row in rows), manifest["counts"]["canonical_parents"])
+            self.assertEqual({row["planned_parents"] for row in rows}, {str(manifest["counts"]["canonical_parents"])})
+            self.assertEqual(sum(int(row["parents"]) for row in rows if row["state"] in testable_states),
+                             manifest["counts"][f"{rule}_testable_parents"])
+            global_union = [row for row in table(self.sources / "detection.tsv") if (row["scope"], row["population"], row["endpoint"],
+                            row["cohort"]) == ("global", "all_records", rule, "native")][0]
+            positive = sum(int(row["parents"]) for row in rows if row["state"] in {"identified_positive", "positive_unresolved_breadth"})
+            self.assertEqual(positive, int(global_union["reference_positive"]))
+
+    def test_evidence_state_order_of_assessment(self):
+        base = dict(applicability="operational_retained_search", completion="successful", resolution="resolved_zero",
+                    retrieval="retained_not_exhaustive")
+        self.assertEqual(evidence_state(dict(base, applicability="censored_untestable"), 3), "untestable")
+        self.assertEqual(evidence_state(dict(base, applicability="chance_limited"), 3), "chance_limited")
+        self.assertEqual(evidence_state(dict(base, completion="failed"), 0), "failed_or_incomplete")
+        self.assertEqual(evidence_state(base, 0), "raw_zero")
+        self.assertEqual(evidence_state(base, 4), "endpoint_non_positive")
+        self.assertEqual(evidence_state(dict(base, retrieval="target_limit_reached"), 4), "cap_limited_non_positive")
+        self.assertEqual(evidence_state(dict(base, resolution="resolved_positive"), 4), "identified_positive")
+        self.assertEqual(evidence_state(dict(base, resolution="positive_with_unresolved_breadth"), 4), "positive_unresolved_breadth")
+        self.assertEqual(evidence_state(dict(base, resolution="unresolved"), 4), "detection_unresolved")
 
     def test_figure_tables(self):
         breadth = table(self.sources / "paired_breadth.tsv")

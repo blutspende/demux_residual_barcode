@@ -4,6 +4,8 @@ Built from the central metrics, the reports and the run's stage outputs only; no
 run outputs. Union rows cover every panel condition. Excluded testability states count neither as 0 nor as 1.
 Result figures show testable queries only: the alignment-quality tables cover the HSPs of strict-testable reference
 sequences, and the control and query-property tables flag strict-testable parents (``strict_testable``).
+evidence_states.tsv counts the canonical parents per rule and evidence state (Figure 2C); detection.tsv carries the
+relative-entropy Hoeffding limits of every control detection mean (Figure 3A).
 Tables are written at full precision; booleans as True/False. manifest.json lists the SHA-256 of every table, the
 inputs, the counts quoted in the figures and the positional policy.
 """
@@ -19,7 +21,7 @@ from ..controls import check_draw, dinucleotides, draw_seed
 from ..matching import strict_hsp, tolerant_hsp
 from ..outcomes import OUTCOME_SCHEMA, matched_population
 from ..positional import primary_positional_events
-from ..precision import mean_interval
+from ..precision import mean_interval, relative_entropy_limits
 from ..sequences import canonical, canonical_id, read_fasta
 from .common import (GLOBAL, GROUPS, group_key, load_analysis, new_directory, ordered_groups, read_tsv, sha256, verified_files,
                      verify_manifest, write_json, write_tsv)
@@ -45,12 +47,67 @@ def rule_testable_parents(outcomes: list[dict], endpoint: str = "strict") -> set
             and row["population"] == "all_records" and row["applicability"] == "operational_retained_search"}
 
 
-def detection_rows(metrics: Path) -> list[dict]:
-    """Table 1 / Figure 3A source: display classes and platform/global unions, both cohorts and populations."""
+def detection_rows(metrics: Path, alpha: float, seed_units: bool) -> list[dict]:
+    """Table 1 / Figure 3A source: display classes and platform/global unions, both cohorts and populations.
+
+    control_lower / control_upper are the relative-entropy Hoeffding limits of the control detection mean at ``alpha``
+    (the precision bound of the Methods). Every control draw must be its own seed stream (``seed_units``)."""
+    if not seed_units:
+        raise ContractError("Control intervals per display class need one seed stream per draw")
     rows = [row for row in read_tsv(metrics / "table1_source.tsv") if row["scope"] in {"class", "group", "global"}]
-    result = [dict({name: row[name] for name in DETECTION_FIELDS if name in row},
-                   block="Reference classes" if row["scope"] == "class" else "Platform unions") for row in rows]
+    result = []
+    for row in rows:
+        entry = dict({name: row[name] for name in DETECTION_FIELDS if name in row},
+                     block="Reference classes" if row["scope"] == "class" else "Platform unions")
+        draws, positive = int(row["control_draws"]), int(row["control_positive"])
+        lower, upper = relative_entropy_limits(positive / draws, draws, alpha) if draws else (None, None)
+        result.append(dict(entry, control_lower=lower, control_upper=upper))
     return sorted(result, key=lambda row: (int(row["order"]), row["population"], row["endpoint"], row["cohort"]))
+
+
+EVIDENCE_STATES = ("untestable", "chance_limited", "partially_censored", "other_inapplicable", "failed_or_incomplete", "raw_zero",
+                   "endpoint_non_positive", "cap_limited_non_positive", "detection_unresolved", "positive_unresolved_breadth",
+                   "identified_positive")
+
+
+def evidence_state(row: dict, raw_hsps: int) -> str:
+    """The evidence state of one reference search (Figure 2C), in the order of assessment."""
+    applicability = row["applicability"]
+    if applicability != "operational_retained_search":
+        return {"censored_untestable": "untestable", "chance_limited": "chance_limited",
+                "partially_score_censored": "partially_censored"}.get(applicability, "other_inapplicable")
+    if row["completion"] != "successful":
+        return "failed_or_incomplete"
+    if row["resolution"] == "resolved_positive":
+        return "identified_positive"
+    if row["resolution"] == "positive_with_unresolved_breadth":
+        return "positive_unresolved_breadth"
+    if row["resolution"] != "resolved_zero":
+        return "detection_unresolved"
+    if raw_hsps == 0:
+        return "raw_zero"
+    return "cap_limited_non_positive" if row["retrieval"] == "target_limit_reached" else "endpoint_non_positive"
+
+
+def evidence_states(outcomes: list[dict], statuses: dict) -> list[dict]:
+    """Canonical parents per rule and evidence state (all records). Every parent has one state; its logical queries share the search."""
+    rows = []
+    for endpoint in ("strict", "tolerant"):
+        states = {}
+        for row in outcomes:
+            if row["role"] != "real" or row["endpoint"] != endpoint or row["population"] != "all_records":
+                continue
+            status = statuses.get(row["sequence_id"])
+            state = evidence_state(row, int(status["hsp_rows"]) if status else 0)
+            if states.setdefault(row["parent_id"], state) != state:
+                raise ContractError("Logical queries of one parent disagree on the evidence state")
+        counts = Counter(states.values())
+        testable = sum(counts[name] for name in ("raw_zero", "endpoint_non_positive", "cap_limited_non_positive", "detection_unresolved",
+                                                 "positive_unresolved_breadth", "identified_positive"))
+        if testable != len(rule_testable_parents(outcomes, endpoint)) - counts["failed_or_incomplete"]:
+            raise ContractError("Evidence states do not partition the testable parents")
+        rows += [dict(rule=endpoint, state=name, parents=counts[name], planned_parents=len(states)) for name in EVIDENCE_STATES]
+    return rows
 
 
 def paired_breadth(metrics: Path, outcomes: list[dict]) -> list[dict]:
@@ -313,7 +370,9 @@ def build_figure_sources(destination: Path, *, metrics: Path, reports: Path, ana
     totals = {row["reason"]: int(row["accessions"]) for row in flow_scopes if row["scope"] == "testable_strict" and row["state"] == "all"}
     if sum(row["accessions"] for row in flow if row["state"] != "unresolved" or row["reason"] != "unresolved_identifier") != totals["resolved_identifiers"]:
         raise ContractError("Eligibility flow does not partition the resolved strict accessions")
-    tables = {"detection": (detection_rows(metrics), DETECTION_FIELDS),
+    seed_units = qc_summary[0]["unique_seeds"] == qc_summary[0]["selected_draws"]
+    tables = {"detection": (detection_rows(metrics, 0.05 / len(prefixes), seed_units), DETECTION_FIELDS + ("control_lower", "control_upper")),
+              "evidence_states": (evidence_states(outcomes, statuses), ("rule", "state", "parents", "planned_parents")),
               "paired_breadth": (paired_breadth(metrics, outcomes), ("group", "parent_id", "length", "reference", "control_mean",
                                                                       "reference_positive", "control_positive", "reference_cap", "any_control_cap")),
               "eligibility_flow": (flow, ("state", "reason", "accessions")),

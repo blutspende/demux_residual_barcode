@@ -68,21 +68,48 @@ figures. `figures` runs `build_figures.sh` from `[figures] scripts`
 PNG with its CSV data, and writes `figures_manifest.json`. PNG and CSV files are
 byte-deterministic; PDF files embed a creation time, so the manifest records a
 PDF content digest with the date blanked. Required R packages: ggplot2,
-patchwork, dplyr, tidyr, readr, jsonlite, digest, ragg and scales.
+patchwork, dplyr, tidyr, readr, jsonlite, digest, ragg, scales, hexbin,
+ggbeeswarm and systemfonts.
+
+All figures share one house style,
+[paper3_figure_style.R](../studies/paper3/figures/paper3_figure_style.R). The
+profile `default` gives 170-mm figures of at most 200 mm height with Arial 7 pt
+and bold 8-pt panel tags A, B, C. `nature` (183 mm, at most 170 mm, tags a, b, c)
+and `plos_bmc` (8 pt, 10-pt tags, additional 600-dpi LZW TIFF files) are selected
+with the environment variable `PAPER3_FIG_PROFILE`. The build stops when Arial or
+Courier New (sequences) is not installed, so no fallback font is embedded. Hue
+marks platforms only (Okabe-Ito: ONT blue, Illumina vermilion, BGI/DNBSEQ pink,
+PacBio green). Evidence states use grey value, fill and outline style: testable
+filled dark grey, chance-limited light grey, untestable open, excluded dashed or
+mid grey. Panels carry no titles. Method text, filters, transformations and
+symbol definitions are recorded per figure as `legend_notes` in
+`figures_manifest.json` and belong in the caption. Proportions carry 95%
+Clopper-Pearson intervals. Data with zeros use pseudo-logarithmic axes.
 
 Result figures show testable queries only. A parent is testable under a rule
 when its reference row in `outcomes.tsv` (all records) has applicability
-`operational_retained_search`. Untestable and chance-limited parents are left
-out. The manifest counts the strict- and tolerant-testable parents and the
-returned HSPs of the strict-testable reference sequences.
+`operational_retained_search`. Untestable and chance-limited parents enter no
+proportion. Rows of Figure 3A without a testable parent are written out as "not
+testable at this database size". The manifest counts the strict- and
+tolerant-testable parents and the returned HSPs of the strict-testable reference
+sequences.
+
+`evidence_states.tsv` gives the canonical parents per rule and evidence state
+(untestable, chance-limited, failed or incomplete, raw zero, endpoint
+non-positive, cap-limited non-positive, positive with unresolved breadth,
+identified positive; further states must be empty). The states partition all
+parents, and the testable states sum to the testable parents. `detection.tsv`
+adds `control_lower` and `control_upper`: the relative-entropy Hoeffding limits
+of the control detection mean at alpha = 0.05 / (number of draw prefixes), valid
+because every control draw is its own seed stream.
 
 | Figure (R name) | Content |
 |---|---|
-| Figure 2 (`figure1`) | Framework, matching rules and evidence states. |
-| Figure 3 (`figure2`) | A: strict and tolerant detection of references and their control draws per class and platform union. Rows without a testable parent under either rule are left out. n gives the testable, complete and resolved parents per rule. Table 1 (`table1_reference_classes.csv`) keeps every class. B: paired retained-accession breadth of the strict-testable parents. |
-| Figure 4 (`figure3`) | Positional context of strict matches of testable queries. |
-| Figure 5 (`figure4`) | A: a priori testability against query length. The calibration curves cover every panel length. Points mark the lengths that are testable under the rule of the facet. Benchmark exact spikes missed at E = 10 are drawn only at testable lengths. B–D: record cases, selected from strict-testable queries by the `record_cases` stage. |
+| Figure 2 (`figure1`) | A: the four steps in one row with the exclusions. B: matching rules as achromatic 24-nt examples, thresholds in the column heads. C: evidence states as a CONSORT-style flow with the canonical parents (strict / tolerant) per end state and step brackets that refer to panel A. |
+| Figure 3 (`figure2`) | A: detection per display class and platform union, grouped by platform. Strict and tolerant sit in offset sub-rows. References carry 95% Clopper-Pearson intervals. Control draws are open markers on a grey band (control interval). A rule without testable parents is written out. The n column gives testable parents per rule and the planned parents. Table 1 (`table1_reference_classes.csv`) keeps every class. B: retained accessions per detected parent of the strict breadth cohort as a beeswarm on a pseudo-logarithmic axis. |
+| Figure 4 (`figure3`) | A: eligibility of the accessions with strict matches of testable queries, grouped as included, excluded (in order of application, a single-reason step without records at 0) and unresolved. B: distance to the nearest record end, ECDF for groups with more than five events and points for sparse groups, pseudo-logarithmic axis. C: terminal share k/n with 95% Clopper-Pearson interval against the expected share E/n, with k/n and O/E columns (n.e. when E < 1). |
+| Figure 5 (`figure4`) | A: a priori testability against query length. Every panel length is a point coded by its state under the rule of the facet, with the shortest testable length per rule. Benchmark exact spikes missed at E = 10 are drawn only at testable lengths. B–D: record cases, selected from strict-testable queries by the `record_cases` stage, with a scale bar, a zoom of the nearest record end and a fixed sequence window with coordinates and 5′/3′ ends. |
 | Figure S1 (`figureS1`) | A: length and GC of the strict-testable parents per condition (`query_properties.strict_testable`). B, C: identity and query-span distributions of every returned HSP of the strict-testable reference sequences, rejected HSPs included. |
 | Figure S2 (`figureS4`) | Record cases with their sequence-level verification. |
 | Figure S3 (`figureS3`) | Positional robustness. |
-| Figure S4 (`figureS2`) | A: control means at the draw prefixes with their interval limits (relative-entropy Hoeffding bounds over seed streams). B: final precision targets. Control-draw quality for all parents and for the strict-testable parents (`control_parent_qc.strict_testable`, `control_qc_summary.testable_*`) is exported as Table S6. |
+| Figure S4 (`figureS2`) | A: control means at the draw prefixes with their interval limits (relative-entropy Hoeffding bounds over seed streams), detection and breadth in separate rows. B: final precision targets on a grey scale. Control-draw quality for all parents and for the strict-testable parents (`control_parent_qc.strict_testable`, `control_qc_summary.testable_*`) is exported as Table S6. |

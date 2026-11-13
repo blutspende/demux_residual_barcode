@@ -9,6 +9,9 @@
 # figureS3 = Figure S3, figureS2 = Figure S4. File names keep the R names; main figures are also copied to
 # paper3_manuscript_FigureN.* (byte-identical).
 #
+# Every script sources paper3_figure_style.R (house style: profile from PAPER3_FIG_PROFILE, default 170 mm wide and at most
+# 200 mm tall, Arial and Courier New, panel tags without titles). Caption text is recorded per figure as legend_notes.
+#
 # PNG files, CSV tables and manifests are byte-deterministic. cairo writes the current time into every PDF, so the manifest
 # records a PDF content digest (decompressed content streams with the creation time removed) instead of the file digest.
 # Usage: build_figures.sh SOURCE_DIR OUTPUT_DIR [RSCRIPT] [PYTHON]
@@ -34,8 +37,8 @@ print(f"Verified figure source: {len(manifest['files'])} files")
 EOF
 mkdir -p "$OUTPUT"
 export LC_ALL=C.UTF-8
-"$RSCRIPT" "$HERE/plot_figures.R" "$SOURCE" "$HERE/theme_graphpad.R" "$OUTPUT" all
-"$RSCRIPT" "$HERE/plot_record_cases.R" "$SOURCE" "$OUTPUT" compact
+"$RSCRIPT" "$HERE/plot_figures.R" "$SOURCE" "$HERE/paper3_figure_style.R" "$OUTPUT" all
+"$RSCRIPT" "$HERE/plot_record_cases.R" "$SOURCE" "$HERE/paper3_figure_style.R" "$OUTPUT"
 "$PYTHON" - "$SOURCE" "$OUTPUT" "$HERE" <<'EOF'
 import hashlib, json, re, shutil, sys, zlib
 from pathlib import Path
@@ -74,7 +77,7 @@ for name, checksum in artwork["tables"].items():
 figures = dict(artwork["figures"])
 figures["figureS4"] = dict(cases["figures"]["figureS4"], manuscript_figure="Figure S2")
 assert sorted(figures) == ["figure1", "figure2", "figure3", "figure4", "figureS1", "figureS2", "figureS3", "figureS4"], sorted(figures)
-assert all(figure["height_mm"] <= 240 for figure in figures.values())
+assert all(figure["height_mm"] <= 200 for figure in figures.values())
 copies = {}
 for name, figure in sorted(figures.items()):
     number = figure["manuscript_figure"].replace(" ", "")
@@ -97,7 +100,8 @@ manifest = dict(contract="publication_figures_v1", source_manifest_sha256=source
                 record_case_manifest_sha256=sha256(output / "paper3_case_figure_manifest.json"),
                 R_version=artwork["R_version"], package_versions=artwork["package_versions"], code=code,
                 figures={name: dict(manuscript_figure=figure["manuscript_figure"], height_mm=figure["height_mm"],
-                                    width_mm=figure.get("width_mm", 180)) for name, figure in sorted(figures.items())},
+                                    width_mm=figure["width_mm"], profile=figure["profile"],
+                                    legend_notes=figure.get("legend_notes", [])) for name, figure in sorted(figures.items())},
                 manuscript_copies=copies, graphical_abstract="Figure 1 (graphical abstract) is not rendered from the figure sources",
                 pdf_digest="PDF entries carry content_sha256: decompressed content streams (cross-reference streams excluded) with the "
                            "embedded creation time removed",
