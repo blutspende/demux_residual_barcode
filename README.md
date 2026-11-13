@@ -3,12 +3,7 @@
 A Python framework for reproducible screening of deposited nucleotide records
 against one declared library-preparation reference panel.
 
-**Version 1.0.3.** Release 1.0.3 is the version used for the Paper 3 analysis of NCBI core_nt (`studies/paper3`).
-Release 1.0.1 corrected the benchmark check of one-base HSPs, whose strand the tabular BLAST+ output does not express.
-Release 1.0.2 revised the figure texts, display-class labels, and exported table names of the reporting stages.
-Release 1.0.3 bounds control means with the relative-entropy (Chernoff) form of the Hoeffding inequality, selects
-record cases from strict-testable queries only (`record_triage_v2`), and restricts every result figure to testable
-queries. The search, analysis, and all other stages are unchanged from 1.0.0.
+**Version 1.0.0.** Release 1.0.0 is the version used for the Paper 3 analysis of NCBI core_nt (`studies/paper3`).
 The package provides traceback-validated strict and tolerant matching, pinned
 dinucleotide-shuffled controls, resumable BLAST execution with a production
 database gate and a-priori length-aware testability, eligibility-aware
