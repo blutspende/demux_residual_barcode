@@ -208,7 +208,7 @@ parse_alignment <- function(reference, subject) {
 }
 rule_x0 <- 50
 rule_scale <- 3
-rule_rows_y <- 23 + 6.2 * (seq_len(nrow(matching_rules)) - 1)
+rule_rows_y <- 23 + 5.2 * (seq_len(nrow(matching_rules)) - 1)
 alignment_parts <- bind_rows(lapply(seq_len(nrow(matching_rules)), function(row) {
   mutate(parse_alignment(matching_rules$query[row], matching_rules$aligned_subject[row]), row = row)
 })) %>% mutate(
@@ -227,8 +227,8 @@ draw_outcome <- function(x, y, accepted) {
     mm_segment(c(x - 1.2, x - 1.2), c(y - 1.2, y + 1.2), c(x + 1.2, x + 1.2), c(y + 1.2, y - 1.2), colour = grey_mid, linewidth = lw(1), lineend = "round")
   }
 }
-rules_height <- 69
-legend_y <- 63
+rules_height <- 59
+legend_y <- 55
 rules_panel <- canvas_plot(rules_height, c(
   list(mm_text(0, 9, "Example", base_pt, "bold"), mm_text(rule_x0, 9, "Alignment to the query", base_pt, "bold"),
     mm_text(symbol_columns[["strict"]], 6.2, "Strict", base_pt, "bold", hjust = 0.5),
@@ -322,7 +322,7 @@ tree_edge_layers <- lapply(seq_len(nrow(tree_edges)), function(index) {
       mm_segment(from$x + from$w / 2, from$y, x_branch, from$y),
       mm_segment(x_branch, from$y, x_branch, to$y),
       mm_segment(x_branch, to$y, to$x - to$w / 2, to$y, head = TRUE),
-      edge_label(x_branch + 1, to$y + ifelse(edge$answer == "no", -1.8, 1.8), edge$answer)))
+      edge_label(x_branch - 0.8, to$y + ifelse(edge$answer == "no", -1.8, 1.8), edge$answer, hjust = 1)))
   }
   if (from$x == to$x) {
     label <- if (edge$from == "T2") paste0("yes, testable (n = ", comma(testable_n[["strict"]]), " / ", comma(testable_n[["tolerant"]]), ")") else edge$answer
