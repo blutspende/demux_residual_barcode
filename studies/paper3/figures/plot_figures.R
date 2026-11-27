@@ -42,7 +42,7 @@ if (!dir.exists(output)) dir.create(output, recursive = TRUE)
 tables_directory <- file.path(output, "tables")
 if (!dir.exists(tables_directory)) dir.create(tables_directory, recursive = TRUE)
 figure_width_mm <- FIG$width
-figure_dpi <- 300
+figure_dpi <- 400
 groups <- c("ONT", "Illumina", "BGI/DNBSEQ", "PacBio")
 colours <- pal_platform[groups]
 draws_per_parent <- manifest$counts$draws_per_parent
@@ -159,7 +159,7 @@ step_left <- (seq_len(4) - 1) * (step_width + 6)
 step_top <- 4.5
 step_bottom <- 14.5
 steps <- data.frame(
-  title = c("Query panel", "Matched search", "Single-HSP support", "Record context"),
+  title = c("Query panel", "Matched search", "Single-HSP match", "Record context"),
   detail = c(paste0(comma(counts$physical_references), " queries, ", comma(counts$canonical_parents), " parents\n",
                     draws_per_parent, " draws per parent"),
              paste0("E = ", production_evalue, ", target limit ", comma(target_limit), "\ntestability by query length"),
@@ -208,6 +208,7 @@ parse_alignment <- function(reference, subject) {
 }
 rule_x0 <- 50
 rule_scale <- 3
+rule_label_indent <- 3
 rule_rows_y <- 23 + 5.2 * (seq_len(nrow(matching_rules)) - 1)
 alignment_parts <- bind_rows(lapply(seq_len(nrow(matching_rules)), function(row) {
   mutate(parse_alignment(matching_rules$query[row], matching_rules$aligned_subject[row]), row = row)
@@ -235,9 +236,9 @@ rules_panel <- canvas_plot(rules_height, c(
     mm_text(symbol_columns[["strict"]], 10.4, "100% identity\nfull length", dense_pt, hjust = 0.5),
     mm_text(symbol_columns[["tolerant"]], 6.2, "Tolerant", base_pt, "bold", hjust = 0.5),
     mm_text(symbol_columns[["tolerant"]], 10.4, "\u226595% identity\n\u226590% span, ungapped", dense_pt, hjust = 0.5),
-    mm_text(0, 16.5, paste0("Query (", query_length, " nt)"), base_pt),
+    mm_text(rule_label_indent, 16.5, paste0("Query (", query_length, " nt)"), base_pt),
     mm_rect(rule_x0, rule_x0 + query_length * rule_scale, 16.5 - 1.5, 16.5 + 1.5, fill = ink),
-    mm_text(0, rule_rows_y, matching_rules$example, base_pt),
+    mm_text(rule_label_indent, rule_rows_y, matching_rules$example, base_pt),
     mm_rect(bars$xmin, bars$xmax, bars$ycentre - bars$half, bars$ycentre + bars$half,
       fill = ifelse(bars$kind == "aligned", grey_fill, "white"), colour = grey_dark,
       linetype = ifelse(bars$kind == "aligned", "solid", "dashed")),
@@ -251,8 +252,8 @@ rules_panel <- canvas_plot(rules_height, c(
     mm_rect(22, 25.5, legend_y - 1.3, legend_y + 1.3, colour = grey_dark, linetype = "dashed"), mm_text(27, legend_y, "Unaligned query bases"),
     mm_rect(60, 62.6, legend_y - 1.3, legend_y + 1.3, fill = ink), mm_text(64.5, legend_y, "Mismatch"),
     mm_segment(80, legend_y, 84.5, legend_y, colour = grey_dark, linewidth = lw(0.75)), mm_text(86.5, legend_y, "Gap within one HSP"),
-    draw_outcome(118, legend_y, TRUE), mm_text(121, legend_y, "Accepted"),
-    draw_outcome(138, legend_y, FALSE), mm_text(141, legend_y, "Rejected"))))
+    draw_outcome(118, legend_y, TRUE), mm_text(121, legend_y, "Qualifies"),
+    draw_outcome(138, legend_y, FALSE), mm_text(141, legend_y, "Does not qualify"))))
 
 # C: evidence states as a CONSORT-style decision tree with the canonical parents (strict / tolerant) in every end state.
 # Every parent has exactly one state; states that the tree does not draw must be empty.
@@ -269,7 +270,7 @@ stopifnot(testable_n[["strict"]] + state_n("failed_or_incomplete", "strict") == 
           testable_n[["tolerant"]] + state_n("failed_or_incomplete", "tolerant") == counts$tolerant_testable_parents)
 pair_n <- function(state) paste0(comma(state_n(state, "strict")), " / ", comma(state_n(state, "tolerant")))
 evidence_states <- export_csv(data.frame(
-  evidence_state = c("Untestable", "Chance-limited", "Failed or incomplete", "Raw zero", "Endpoint non-positive", "Cap-limited non-positive",
+  evidence_state = c("Untestable", "Chance-limited", "Failed or incomplete", "Raw zero", "Endpoint non-positive", "Target limit reached; no qualifying match",
                      "Positive, unresolved breadth", "Identified positive"),
   state = drawn_states,
   counted_as = c("excluded", "excluded", "excluded", "0", "0", "0", "1", "1"),
@@ -291,10 +292,11 @@ tree_nodes <- data.frame(
   label = c(paste0("Canonical parents (n = ", comma(counts$canonical_parents), ")"),
             paste0("Score retainable at E = ", production_evalue, "\nand chance bound \u2264 ", informative_limit, "?"),
             paste0("Chance bound \u2264 ", testable_limit, "?"),
-            "Search complete?", "Raw HSPs > 0?", "Accepted support?", "Reached target cap?", "Additional breadth resolved?",
+            "Search complete?", "Raw HSPs > 0?", "Qualifying match?", "Reached target cap?", "Additional breadth resolved?",
             state_label("Untestable, excluded", "untestable"), state_label("Chance-limited, excluded", "chance_limited"),
             state_label("Failed or incomplete, excluded", "failed_or_incomplete"), state_label("Raw zero", "raw_zero"),
-            state_label("Endpoint non-positive", "endpoint_non_positive"), state_label("Cap-limited non-positive", "cap_limited_non_positive"),
+            state_label("Endpoint non-positive", "endpoint_non_positive"),
+            paste0("Target limit reached; no qualifying match\n(n = ", pair_n("cap_limited_non_positive"), ")"),
             state_label("Positive, unresolved breadth", "positive_unresolved_breadth"), state_label("Identified positive", "identified_positive")),
   kind = c("start", rep("question", 7), rep("excluded", 3), rep("zero", 3), rep("positive", 2)),
   x = c(question_x, question_x, question_x, question_x, question_x, question_x, cap_x, question_x,
@@ -348,12 +350,13 @@ tree_panel <- canvas_plot(tree_height, c(
   bracket(13.5, 40, 2), bracket(43, 82.5, 3), tree_edge_layers))
 figure1_legend_notes <- c(
   "A, The four steps. Untestable, chance-limited and incomplete searches leave every count. Record context defines the linear-genomic set.",
-  "B, Conceptual 24-nt examples. HSP: high-scoring segment pair. Two separate bars are two HSPs, each assessed alone. Strict support is nested within tolerant support.",
+  "B, Conceptual 24-nt examples. HSP: high-scoring segment pair. Two separate bars are two HSPs, each assessed alone. Every strict match is also a tolerant match.",
   paste0("C, Evidence states in the order of assessment, with the canonical parents (strict / tolerant) per end state. Dashed outlines mark excluded states, ",
          "white boxes counted non-positive states and grey boxes counted positive states. E: expected chance count of the search (E-value). ",
          "Step numbers refer to panel A."))
 figure1_heights <- c(workflow_height, rules_height, tree_height)
 figure1 <- assemble(workflow_panel, rules_panel, tree_panel, heights = figure1_heights) & theme(plot.margin = margin(0, 0, 0, 0))
+figure1 <- figure1 + plot_annotation(theme = theme(plot.margin = margin(1.5, 2.5, 0.5, 2.5, "mm")))
 save_figure("figure1", figure1, sum(figure1_heights), c("Workflow steps", "Matching rules schematic", "Evidence-state flow with parent counts"),
             c("matching_examples.tsv", "manifest.json", "length_testability.tsv", "evidence_states.tsv"),
             "Conceptual method illustration with the canonical-parent count of every evidence state",
@@ -445,11 +448,18 @@ top_y <- max(row_info$y)
 n_column_x <- 104
 legend_keys <- c("Strict, reference (95% CI)", "Tolerant, reference (95% CI)", "Strict, control draws", "Tolerant, control draws",
                  "Control interval")
+# Separator lines between the platform blocks: at the top edge of every block but the first (y = Inf does not train the scale),
+# across the strip, row-label, plot and n columns (x in data units, drawn outside the plot area thanks to clip = "off").
+platform_separators <- distinct(row_info, facet) %>% filter(as.integer(facet) != min(as.integer(facet))) %>%
+  mutate(x = -54.5, xend = 136, y = Inf)
 legend_dummy <- data.frame(facet = factor(platform_levels[1], levels = platform_levels), x = 0, y = top_y,
                            key = factor(legend_keys, levels = legend_keys))
 detection_plot <- ggplot(filter(detection_points, testable_parents > 0)) +
-  geom_rect(aes(xmin = control_lower_pct, xmax = pmax(control_upper_pct, control_lower_pct + 0.25), ymin = ypos - 0.13, ymax = ypos + 0.13),
+  geom_segment(data = platform_separators, aes(x = x, xend = xend, y = y, yend = y), colour = grey_mid, linewidth = lw(0.5),
+               inherit.aes = FALSE) +
+  geom_rect(aes(xmin = control_lower_pct, xmax = control_upper_pct, ymin = ypos - 0.13, ymax = ypos + 0.13),
             fill = grey_band, colour = NA) +
+  geom_linerange(aes(xmin = control_lower_pct, xmax = control_upper_pct, y = ypos), colour = "#737373", linewidth = lw(1)) +
   geom_point(aes(control_pct, ypos, shape = I(shape), colour = I(colour)), fill = "white", size = 1.2, stroke = lw(0.6)) +
   geom_linerange(aes(xmin = reference_lower_pct, xmax = reference_upper_pct, y = ypos, colour = I(colour)), linewidth = lw(0.75)) +
   geom_point(aes(reference_pct, ypos, shape = I(shape), colour = I(colour), fill = I(colour)), size = 1.5, stroke = lw(0.5)) +
@@ -467,7 +477,7 @@ detection_plot <- ggplot(filter(detection_points, testable_parents > 0)) +
   scale_shape_manual(values = c(21, 24, 1, 2, 15), limits = legend_keys, name = NULL,
     guide = guide_legend(nrow = 2, byrow = FALSE, override.aes = list(alpha = 1, size = c(1.5, 1.5, 1.2, 1.2, 2.6),
       colour = c(ink, ink, ink, ink, grey_band), fill = c(ink, ink, "white", "white", grey_band)))) +
-  scale_x_continuous("Parents with an accepted match (%)", breaks = seq(0, 100, 25), expand = expansion(add = c(1, 1))) +
+  scale_x_continuous("Parents with a qualifying match (%)", breaks = seq(0, 100, 25), expand = expansion(add = c(1, 1))) +
   scale_y_continuous(NULL, breaks = function(limits) row_info$y[row_info$y >= limits[1] & row_info$y <= limits[2]],
                      labels = function(breaks) unname(label_lookup[as.character(breaks)]), expand = expansion(add = 0.55)) +
   coord_cartesian(xlim = c(0, 100), clip = "off") +
@@ -481,21 +491,29 @@ detection_plot <- ggplot(filter(detection_points, testable_parents > 0)) +
 breadth <- load_table("paired_breadth") %>% filter(group != "Global union") %>% group_order()
 breadth_summary <- breadth %>% group_by(group, .drop = FALSE) %>%
   summarise(parents = n(), detected = sum(reference > 0), zero_pairs = sum(reference == 0 & control_mean == 0),
-            highest_control_mean = if (n()) max(control_mean) else NA_real_, .groups = "drop")
+            highest_control_mean = if (n()) max(control_mean) else NA_real_,
+            all_parent_mean = mean(reference), .groups = "drop")
 breadth_points <- export_csv(breadth %>% filter(reference > 0) %>% arrange(group, reference, parent_id) %>%
   transmute(group = as.character(group), parent_id, reference_accessions = reference, control_mean), "fig3B_breadth_per_detected_parent.csv")
 breadth_points <- breadth_points %>% mutate(group = factor(group, levels = groups))
-breadth_axis <- setNames(paste0(breadth_summary$group, "\nn detected = ", comma(breadth_summary$detected),
-                                "\nboth zero = ", comma(breadth_summary$zero_pairs)), as.character(breadth_summary$group))
+breadth_axis <- setNames(paste0(breadth_summary$group, "\nn = ", comma(breadth_summary$detected),
+                                "\nboth 0: ", comma(breadth_summary$zero_pairs),
+                                "\nMean (all):\n", formatC(breadth_summary$all_parent_mean, format = "f", digits = 2)),
+                         as.character(breadth_summary$group))
+invisible(export_csv(breadth_summary, "fig3B_breadth_summary.csv"))
 breadth_breaks <- c(1, 10, 100, 1000)
 breadth_breaks <- breadth_breaks[breadth_breaks <= max(10, max(breadth_points$reference_accessions, 1) * 1.5)]
-breadth_plot <- ggplot(breadth_points, aes(group, reference_accessions, colour = group)) +
+# Panel B carries an empty left strip like panel A. Without it, patchwork places the y-axis of B in the strip column of A, far left
+# of the plot area, so the y- and x-axes do not meet. free(type = "label") then keeps the axis title next to the axis.
+breadth_plot <- ggplot(mutate(breadth_points, row_strip = ""), aes(group, reference_accessions, colour = group)) +
   ggbeeswarm::geom_quasirandom(width = 0.32, size = 0.9, alpha = 0.85, stroke = 0) +
   scale_colour_manual(values = colours, guide = "none") +
   scale_x_discrete(NULL, labels = breadth_axis, drop = FALSE) +
   scale_y_continuous("Retained accessions\nper detected parent", transform = pseudo_log, breaks = breadth_breaks, labels = comma,
                      limits = c(0.8, NA)) +
-  theme(axis.text.x = element_text(size = dense_pt, lineheight = 0.95), plot.margin = margin(3, 30, 1.5, 1.5, "mm"))
+  facet_grid(rows = vars(row_strip), switch = "y") +
+  theme(axis.text.x = element_text(size = dense_pt * AXIS_TEXT_SCALE, lineheight = 0.95), plot.margin = margin(3, 30, 1.5, 1.5, "mm"),
+        strip.placement = "outside", strip.text.y.left = element_blank())
 highest_control <- max(breadth$control_mean)
 figure2_legend_notes <- c(
   paste0("A, Detection per display class and per platform union. Circles: strict. Triangles: tolerant. Filled markers: references with 95% ",
@@ -503,13 +521,14 @@ figure2_legend_notes <- c(
          "shows the relative-entropy Hoeffding interval of the control mean (Methods). The n column gives the testable, complete and resolved ",
          "parents per rule and, in parentheses, the planned parents of the row. Classes share parents, so class rows need not sum to the union row."),
   paste0("B, Retained accessions per detected parent in the strict breadth cohort, one point per parent, on a pseudo-logarithmic axis. ",
-         "n detected: parents with a reference count above 0. Both zero: parents with zero reference and control breadth. The highest ",
+         "n: parents with a reference count above 0. Both 0: parents with zero reference and control breadth. Mean (all): ",
+         "reference breadth averaged over every parent in the strict breadth cohort, including zeros. The highest ",
          "control mean is ", format(signif(highest_control, 2), nsmall = 0), " accessions."))
-figure2_heights <- c(4.6 * max(row_info$y) + 30, 46)
-figure2 <- assemble(detection_plot, breadth_plot, heights = figure2_heights)
+figure2_heights <- c(4.6 * max(row_info$y) + 30, 55)
+figure2 <- assemble(detection_plot, free(breadth_plot, type = "label", side = "l"), heights = figure2_heights)
 save_figure("figure2", figure2, sum(figure2_heights), c("Detection by class and union with intervals", "Breadth per detected parent"),
   c("detection.tsv", "paired_breadth.tsv"),
-  "Descriptive construct-level support in rule-specific testable cohorts. Untestable and chance-limited parents are excluded",
+  "Descriptive construct-level matches in rule-specific testable cohorts. Untestable and chance-limited parents are excluded",
   c("table1_reference_classes.csv", "fig3A_detection_points.csv", "fig3B_breadth_per_detected_parent.csv"),
   legend_notes = figure2_legend_notes)
 
@@ -517,11 +536,11 @@ save_figure("figure2", figure2, sum(figure2_heights), c("Detection by class and 
 # Figure 3 (manuscript Figure 4). Positional context (strict, a priori testable events of every condition)
 # ---------------------------------------------------------------------------------------------
 # A: eligibility of the accessions with strict matches of testable queries. Reasons are grouped by state and, for exclusions,
-# listed in the order of application. A single-reason step without records (targeting, RNA, circular) is shown at 0.
+# listed in the order of application. A single-reason step without records (RNA, circular) is shown at 0.
 reason_levels <- c(
   linear_genomic_dna_known_exclusions_removed = "Linear-genomic DNA",
   record_type_transcript = "Transcript record", record_type_amplicon = "Amplicon record",
-  record_type_synthetic = "Synthetic record", record_type_vector = "Vector record",
+  record_type_synthetic = "Synthetic origin", record_type_vector = "Vector record",
   origin_synthetic = "Synthetic origin", origin_vector = "Vector origin",
   origin_artificial_other = "Other artificial origin", origin_engineered = "Engineered origin",
   targeted_record = "Targeted record", rna_record = "RNA", circular_record = "Circular",
@@ -536,8 +555,9 @@ state_labels <- c(included = "Included", excluded = "Excluded\n(in order of\napp
 flow <- load_table("eligibility_flow")
 stopifnot(all(flow$reason %in% names(reason_levels)), all(flow$state %in% names(state_labels)))
 stopifnot(sum(flow$accessions[!(flow$state == "unresolved" & flow$reason == "unresolved_identifier")]) == counts$testable_strict_accessions)
-single_steps <- c("targeted_record", "rna_record", "circular_record")
-flow <- bind_rows(flow, data.frame(state = "excluded", reason = setdiff(single_steps, flow$reason), accessions = 0))
+single_steps <- c("rna_record", "circular_record")
+missing_steps <- setdiff(single_steps, flow$reason)
+if (length(missing_steps)) flow <- bind_rows(flow, data.frame(state = "excluded", reason = missing_steps, accessions = 0))
 flow <- export_csv(flow %>% arrange(match(state, names(state_labels)), match(reason, names(reason_levels))) %>%
   transmute(state, reason, reason_label = unname(reason_levels[reason]), accessions), "fig4A_eligibility_flow.csv")
 flow_totals <- flow %>% group_by(state) %>% summarise(accessions = sum(accessions), .groups = "drop")
@@ -547,16 +567,17 @@ flow <- flow %>% mutate(state_label = factor(unname(state_labels[state]), levels
 flow_plot <- ggplot(flow, aes(accessions, reason_label)) +
   geom_segment(aes(x = 0, xend = accessions, yend = reason_label, colour = state, linetype = state), linewidth = lw(1)) +
   geom_point(aes(colour = state, fill = state), shape = 21, size = 1.6, stroke = lw(0.75)) +
-  geom_text(aes(label = comma(accessions)), hjust = -0.35, size = fs(dense_pt)) +
+  geom_text(aes(x = ifelse(accessions == 0, 20, accessions), label = comma(accessions)), hjust = -0.35, size = fs(dense_pt)) +
   facet_grid(state_label ~ ., scales = "free_y", space = "free_y", switch = "y") +
   scale_colour_manual(values = c(included = grey_dark, excluded = grey_mid, unresolved = grey_dark), guide = "none") +
   scale_fill_manual(values = c(included = grey_dark, excluded = grey_mid, unresolved = "white"), guide = "none") +
   scale_linetype_manual(values = c(included = "solid", excluded = "solid", unresolved = "dotted"), guide = "none") +
-  scale_x_continuous("Distinct accession.version records", labels = comma, expand = expansion(mult = c(0, 0.1))) +
+  # The identifier format accession.version is set in italics so that it reads as one term.
+  scale_x_continuous(expression("Distinct" ~ italic("accession.version") ~ "records"), labels = comma, expand = expansion(mult = c(0, 0.1))) +
   scale_y_discrete(NULL) +
   coord_cartesian(clip = "off") +
   theme(strip.text.y.left = element_text(angle = 0, hjust = 1, vjust = 0.5, face = "bold", size = dense_pt), axis.ticks.y = element_blank(),
-        panel.spacing.y = unit(1.2, "mm"), axis.text.y = element_text(size = dense_pt))
+        panel.spacing.y = unit(1.2, "mm"), axis.text.y = element_text(size = dense_pt * AXIS_TEXT_SCALE))
 
 # B: distance to the nearest stored record end, eligible linear-genomic records of at least the primary minimum length.
 # Groups with more than five events: empirical cumulative distribution. Sparse groups: every event as a point in a strip.
@@ -615,7 +636,7 @@ distance_plot <- ggplot() +
   theme(strip.text = element_blank(), panel.spacing.y = unit(1.5, "mm"))
 
 # C: share of events within W of a record end, observed with 95% Clopper-Pearson interval, against the share expected under
-# uniform placement (vertical tick). One event per unit is chosen by a position-independent hash.
+# uniform placement (vertical tick). One event per unit is chosen by a deterministic hash of event identifiers and coordinates, without ranking by end distance.
 sensitivity <- load_table("position_sensitivity") %>% filter(group != "Global union") %>% group_order()
 variant_labels <- c(all_events = "All events", one_per_accession = "One per accession", one_per_bioproject = "One per BioProject",
                     excluding_targeted_insdc = "Without INSDC-targeted records")
@@ -631,43 +652,49 @@ terminal <- export_csv(sensitivity %>% filter(window == main_window, minimum_len
 terminal <- terminal %>% mutate(group = factor(group, levels = groups),
   variant = factor(unname(variant_labels[variant]), levels = rev(unname(variant_labels))),
   kn_label = paste0(comma(terminal), "/", comma(events)),
-  oe_label = ifelse(is.na(ratio), "n.e.", ifelse(expected < 1, "n.e.", paste0(formatC(ratio, format = "f", digits = 1), "\u00d7"))),
-  oe_colour = ifelse(is.na(ratio) | expected < 1, grey_text, ink))
+  oe_label = ifelse(is.na(ratio), "n.e.", paste0(formatC(ratio, format = "f", digits = 1), "\u00d7")),
+  oe_colour = ifelse(is.na(ratio), grey_text, ink))
 header_group <- factor(groups[groups %in% terminal$group][1], levels = groups)
 terminal_header <- data.frame(group = header_group, variant = factor(rev(levels(terminal$variant))[1], levels = levels(terminal$variant)))
 terminal_plot <- ggplot(terminal, aes(y = variant)) +
   geom_linerange(aes(xmin = 100 * observed_lower, xmax = 100 * observed_upper, colour = group), linewidth = lw(0.75), na.rm = TRUE) +
   geom_point(aes(x = 100 * observed_fraction, shape = variant, colour = group), fill = "white", size = 1.4, na.rm = TRUE) +
-  # The expected share is a drawn tick (a character shape would use the device font, not Arial).
-  geom_segment(aes(x = 100 * expected_fraction, xend = 100 * expected_fraction, y = as.numeric(variant) - 0.32, yend = as.numeric(variant) + 0.32),
-               colour = ink, linewidth = lw(0.75), na.rm = TRUE) +
+  # The expected share is a drawn tick (a character shape would use the device font, not Arial). It has its own legend key, so the
+  # figure itself says what the tick is.
+  geom_segment(aes(x = 100 * expected_fraction, xend = 100 * expected_fraction, y = as.numeric(variant) - 0.32, yend = as.numeric(variant) + 0.32,
+                   linetype = "Expected share under uniform placement"), colour = ink, linewidth = lw(0.75), na.rm = TRUE, key_glyph = "vline") +
   geom_text(aes(x = 106, label = kn_label), hjust = 0, size = fs(dense_pt)) +
   geom_text(aes(x = 138, label = oe_label, colour = I(oe_colour)), hjust = 0, size = fs(dense_pt)) +
   geom_text(data = terminal_header, aes(x = 106, y = 4.85, label = "k/n"), hjust = 0, size = fs(dense_pt), fontface = "bold") +
   geom_text(data = terminal_header, aes(x = 138, y = 4.85, label = "O/E"), hjust = 0, size = fs(dense_pt), fontface = "bold") +
   facet_grid(group ~ ., switch = "y") +
   scale_colour_manual(values = colours, guide = "none") +
-  scale_shape_manual(values = variant_shapes, breaks = unname(variant_labels), name = NULL,
-                     guide = guide_legend(ncol = 2, override.aes = list(colour = ink))) +
+  scale_shape_manual(values = variant_shapes, breaks = unname(variant_labels), name = "Observed share (95% CI)",
+                     guide = guide_legend(ncol = 2, order = 1, override.aes = list(colour = ink))) +
+  scale_linetype_manual(values = c("Expected share under uniform placement" = "solid"), name = NULL,
+                        guide = guide_legend(order = 2, override.aes = list(colour = ink))) +
   scale_x_continuous(paste0("Events within ", comma(main_window), " nt of a record end (%)"), breaks = seq(0, 100, 25),
                      expand = expansion(add = 2)) +
   scale_y_discrete(NULL, expand = expansion(add = 0.6)) +
   coord_cartesian(xlim = c(0, 100), clip = "off") +
   theme(strip.text.y.left = element_text(angle = 0, hjust = 1, vjust = 0.5, face = "bold", size = dense_pt), axis.text.y = element_blank(),
         axis.ticks.y = element_blank(), panel.spacing.y = unit(1.2, "mm"), legend.position = "bottom",
+        legend.box = "vertical", legend.box.just = "left", legend.spacing.y = unit(0.6, "mm"),
+        legend.title = element_text(size = dense_pt), legend.title.position = "top",
         legend.text = element_text(size = dense_pt), legend.key.height = unit(2.6, "mm"), plot.margin = margin(3, 26, 1.5, 1.5, "mm"))
 figure3_legend_notes <- c(
   paste0("A, Eligibility of the ", flow_count("included"), " + ", flow_count("excluded"), " + ", flow_count("unresolved"), " = ",
          comma(sum(flow_totals$accessions)), " accession.version records with strict matches of testable queries. ",
-         "Exclusion reasons are applied in a fixed order (record type, origin, targeting, RNA, circular), and each record counts under its ",
+         "Exclusion reasons are applied in a fixed order (record type, origin, RNA, circular), and each record counts under its ",
          "first reason. Excluded records keep their matches in the all-record population."),
   paste0("B, Distance from strict, orientation-deduplicated events of testable queries to the nearest stored end of eligible linear-genomic ",
          "records of at least ", comma(main_minimum / 1000), " kb, on a pseudo-logarithmic axis. Groups with more than five events are shown as ",
          "empirical cumulative distributions. Sparse groups show every event as a point. Dashed line: W = ", comma(main_window), " nt."),
   paste0("C, Share of events within W = ", comma(main_window), " nt of a record end in the same population. Points: observed share k/n with ",
          "95% Clopper-Pearson interval. Vertical tick: the share expected under uniform placement, E/n, with the terminal probability ",
-         "min(1, 2(W + 1)/(L \u2212 a + 1)) per event. O/E: observed / expected terminal events. n.e.: not estimated because E < 1. ",
-         "One event per accession or BioProject is chosen by a position-independent hash. A stored record end is not necessarily a ",
+         "min(1, 2(W + 1)/(L \u2212 a + 1)) per event. O/E: observed / expected terminal events, also shown when E < 1; ",
+         "ratios for sparse groups are descriptive. n.e.: no eligible events. ",
+         "One event per accession or BioProject is chosen by a deterministic hash of event identifiers and coordinates, without ranking by end distance. A stored record end is not necessarily a ",
          "chromosome end."))
 figure3_heights <- c(42, 70)
 figure3 <- assemble(flow_plot, distance_plot, terminal_plot, design = "AA\nBC", heights = figure3_heights)
@@ -833,10 +860,11 @@ inset_x0 <- 126
 inset_x1 <- figure_width_mm - 3
 minimum_marker_mm <- 0.9
 sequence_x0 <- 36
-# Courier New advances 0.6 em, so 6-pt bases need 1.27 mm and fit the 1.29-mm pitch of a 91-nt window.
-sequence_pt <- 6
+# Two lines preserve the full 91-nt window while allowing larger sequence letters.
+sequence_pt <- 7.5
+sequence_line_bases <- 50
 case_window <- if (nrow(case_data)) max(case_data$match_length_nt) + 40 else 0
-sequence_dx <- if (nrow(case_data)) min(1.33, (figure_width_mm - sequence_x0 - 17) / case_window) else 1.33
+sequence_dx <- 1.8
 nice_length <- function(target) {
   candidates <- as.vector(outer(c(1, 2, 5), 10^(0:9)))
   max(candidates[candidates <= target])
@@ -926,32 +954,49 @@ record_case_panel <- function(row) {
   minus <- row$display_orientation == "-"
   first_position <- if (minus) row$match_end + left_n else row$match_start - left_n
   last_position <- if (minus) row$match_start - right_n else row$match_end + right_n
-  x <- sequence_x0 + (seq_along(subject) - 0.5) * sequence_dx
   match_index <- left_n + seq_along(query)
   emphasis <- roles %in% c("barcode", "index")
-  record_y <- 29.6
-  query_y <- 33.6
   record_name <- if (minus) "Record (\u2212)" else "Record (+)"
+  full_query <- rep(".", length(subject))
+  full_query[match_index] <- query
+  strong <- rep(FALSE, length(subject))
+  strong[match_index] <- emphasis
   coordinate_x0 <- sequence_x0 - 4.2
-  coordinate_x1 <- x[length(x)] + sequence_dx / 2 + 4.2
-  tint_runs <- rle(emphasis)
-  tint_end <- cumsum(tint_runs$lengths)
-  tint_start <- tint_end - tint_runs$lengths + 1
-  layers <- c(layers, list(
-    mm_rect(sequence_x0 + (match_index[tint_start] - 1) * sequence_dx, sequence_x0 + match_index[tint_end] * sequence_dx,
-            record_y - 1.9, query_y + 1.9, fill = marker_colour, alpha = ifelse(tint_runs$values, 0.45, 0.2)),
-    mm_text(0, record_y, record_name, dense_pt), mm_text(0, query_y, "Query", dense_pt),
-    mm_text(coordinate_x0 - 1.8, record_y, comma(first_position), dense_pt, hjust = 1),
-    mm_text(coordinate_x0, record_y, "5\u2032", dense_pt, hjust = 0.5), mm_text(coordinate_x1, record_y, "3\u2032", dense_pt, hjust = 0.5),
-    mm_text(coordinate_x1 + 1.8, record_y, comma(last_position), dense_pt, hjust = 0),
-    mm_text(x[-match_index], record_y, subject[-match_index], sequence_pt, hjust = 0.5, family = FONT_MONO, colour = grey_text),
-    mm_text(x[match_index], record_y, subject[match_index], sequence_pt, "bold", hjust = 0.5, family = FONT_MONO),
-    mm_text(x[match_index], query_y, query, sequence_pt, "bold", hjust = 0.5, family = FONT_MONO),
-    mm_text(x[min(match_index)] - sequence_dx / 2 - 2.4, query_y, "5\u2032", dense_pt, hjust = 0.5),
-    mm_text(x[max(match_index)] + sequence_dx / 2 + 2.4, query_y, "3\u2032", dense_pt, hjust = 0.5)))
+  for (offset in seq(1, length(subject), by = sequence_line_bases)) {
+    indices <- offset:min(length(subject), offset + sequence_line_bases - 1)
+    local_match <- which(indices %in% match_index)
+    other <- setdiff(seq_along(indices), local_match)
+    x <- sequence_x0 + (seq_along(indices) - 0.5) * sequence_dx
+    record_y <- 29.6 + 8.5 * ((offset - 1) / sequence_line_bases)
+    query_y <- record_y + 4
+    direction <- if (minus) -1 else 1
+    line_first <- first_position + direction * (indices[1] - 1)
+    line_last <- first_position + direction * (tail(indices, 1) - 1)
+    coordinate_x1 <- sequence_x0 + length(indices) * sequence_dx + 4.2
+    if (length(local_match)) {
+      tint_runs <- rle(strong[indices[local_match]])
+      tint_end <- cumsum(tint_runs$lengths)
+      tint_start <- tint_end - tint_runs$lengths + 1
+      layers <- c(layers, list(mm_rect(
+        sequence_x0 + (local_match[tint_start] - 1) * sequence_dx,
+        sequence_x0 + local_match[tint_end] * sequence_dx,
+        record_y - 1.9, query_y + 1.9, fill = marker_colour,
+        alpha = ifelse(tint_runs$values, 0.45, 0.2))))
+    }
+    layers <- c(layers, list(
+      mm_text(0, record_y, record_name, dense_pt), mm_text(0, query_y, "Query", dense_pt),
+      mm_text(coordinate_x0 - 1.8, record_y, comma(line_first), dense_pt, hjust = 1),
+      mm_text(coordinate_x0, record_y, "5\u2032", dense_pt, hjust = 0.5),
+      mm_text(coordinate_x1, record_y, "3\u2032", dense_pt, hjust = 0.5),
+      mm_text(coordinate_x1 + 1.8, record_y, comma(line_last), dense_pt, hjust = 0),
+      mm_text(x[other], record_y, subject[indices[other]], sequence_pt, hjust = 0.5, family = FONT_MONO, colour = grey_text),
+      mm_text(x[other], query_y, full_query[indices[other]], sequence_pt, hjust = 0.5, family = FONT_MONO, colour = grey_light),
+      mm_text(x[local_match], record_y, subject[indices[local_match]], sequence_pt, "bold", hjust = 0.5, family = FONT_MONO),
+      mm_text(x[local_match], query_y, full_query[indices[local_match]], sequence_pt, "bold", hjust = 0.5, family = FONT_MONO)))
+  }
   canvas_plot(case_height, layers)
 }
-case_height <- 37
+case_height <- 45
 case_panels <- lapply(seq_len(nrow(case_data)), function(index) record_case_panel(case_data[index, ]))
 case_heights <- rep(case_height, length(case_panels))
 if (!length(case_panels)) {
@@ -969,7 +1014,8 @@ figure4_legend_notes <- c(
   paste0("Linear records are drawn to scale with a scale bar; the zoom shows the record end nearest to the match. Position 1 of a circular ",
          "record is its stored origin. Match markers and sequence tints use the platform colour of the query; the darker tint marks the ",
          "barcode or index segment. Sequences show ", case_window, " nt of the record strand that carries the query in its searched orientation, ",
-         "with record coordinates at both ends. Query identifiers: ", case_ids, "."))
+         "in two lines, with record coordinates at both ends of each line. Dots mark positions outside the query. ",
+         "Match markers are enlarged for visibility. Query identifiers: ", case_ids, "."))
 figure4_heights <- c(64, case_heights)
 # The record diagrams are millimetre canvases over the full width, so they are not aligned with the plot area of panel A.
 figure4 <- assemble(c(list(evalue_plot), lapply(case_panels, function(panel) wrap_elements(full = panel))), heights = figure4_heights)
@@ -1019,7 +1065,7 @@ length_plot <- ggplot(length_counts, aes(length, condition_label, colour = group
   geom_point(aes(size = parents), alpha = 0.6, stroke = 0) + property_size +
   scale_colour_manual(values = colours, guide = "none") +
   scale_x_continuous("Length (nt)", limits = c(0, 120), breaks = sort(unique(c(0, strict_first, if (tolerant_line) tolerant_first, 60, 90, 120)))) +
-  labs(y = NULL) + theme(axis.text.y = element_text(size = dense_pt))
+  labs(y = NULL) + theme(axis.text.y = element_text(size = dense_pt * AXIS_TEXT_SCALE))
 composition_plot <- ggplot(composition_counts, aes(gc_fraction * 100, condition_label, colour = group)) +
   geom_point(aes(size = parents), alpha = 0.6, stroke = 0) + property_size +
   scale_colour_manual(values = colours, guide = "none") + scale_x_continuous("GC (%)", limits = c(0, 100)) +
@@ -1077,10 +1123,10 @@ joint_plot <- ggplot(joint, aes(identity_bin + 0.5, span_bin + 0.5, fill = group
   scale_alpha_continuous(transform = "log10", range = c(0.4, 1), name = "HSPs per bin",
     breaks = c(1, 100, 10000, 100000), labels = label_power_expr,
     guide = guide_legend(override.aes = list(fill = ink), nrow = 1)) +
-  scale_x_continuous("Identity bin (%)", breaks = seq(joint_identity_start, 100, 5) + 0.5, labels = seq(joint_identity_start, 100, 5)) +
+  scale_x_continuous("Identity bin (%)", breaks = seq(joint_identity_start, 100, 10) + 0.5, labels = seq(joint_identity_start, 100, 10)) +
   scale_y_continuous("Span bin (%)", breaks = seq(0, 100, 25) + 0.5, labels = seq(0, 100, 25)) +
   coord_cartesian(xlim = c(joint_identity_start, 101), ylim = c(0, 101), expand = FALSE) +
-  theme(legend.position = "bottom", strip.text = element_text(hjust = 0.5))
+  theme(legend.position = "bottom", strip.text = element_text(hjust = 0.5), panel.spacing.x = unit(4.5, "mm"))
 figureS1_legend_notes <- c(
   paste0("A, Length and GC content of the strict-testable parents per condition. Strict matching is testable from ", strict_first, " nt.",
          if (tolerant_line) paste0(" Dotted line: tolerant matching is testable from ", tolerant_first, " nt (first testable panel length).") else ""),
@@ -1194,7 +1240,11 @@ precision_row <- function(measure_name, y_title, transform = "identity") {
       linetype = rule_label, group = rule_label), inherit.aes = FALSE, linewidth = lw(0.5)) +
     facet_wrap(~group, nrow = 1, scales = "free_y") +
     scale_x_continuous("Draws per parent", breaks = draw_prefixes) +
-    scale_y_continuous(y_title, transform = transform, breaks = scales::breaks_pretty(n = 3)) +
+    scale_y_continuous(y_title, transform = transform, breaks = function(limits) {
+      # On the large pseudo-logarithmic breadth range, arithmetic ticks crowd at the top after enlargement.
+      if (measure_name == "breadth" && max(limits) > 100) c(0, 10, 100, 1000, 10000)
+      else scales::breaks_pretty(n = 3)(limits)
+    }) +
     scale_colour_manual(values = colours, guide = "none") +
     scale_shape_manual(values = c(Strict = 21, Tolerant = 24), name = NULL) +
     scale_linetype_manual(values = c(Strict = "dotted", Tolerant = "dashed"), name = NULL) +
@@ -1240,7 +1290,8 @@ precision_status <- ggplot(precision_final, aes(cell, group, fill = ratio)) +
   labs(x = NULL, y = NULL) +
   theme(axis.line = element_blank(), axis.ticks = element_blank(), legend.position = "bottom", strip.text = element_text(hjust = 0.5))
 figureS2_legend_notes <- c(testable_control_note,
-  paste0("A, Control means at each declared draw prefix with their Monte Carlo intervals. Filled markers: conditional bound. Open markers: ",
+  paste0("A, All-record population, shown separately for the four platform groups. Control means at each declared draw prefix ",
+         "with their Monte Carlo intervals. Filled markers: conditional bound. Open markers: ",
          "resolved-subset diagnostic. Lines: the final-parent cohort followed back through the prefixes (dotted: strict, dashed: tolerant). ",
          "Breadth uses a pseudo-logarithmic axis. Y scales differ between panels."),
   paste0("B, Final precision targets. ", precision_count_label(filter(precision_counts, condition == "all_conditions")),
@@ -1311,9 +1362,9 @@ sensitivity_plot <- ggplot(grid, aes(x, cell, colour = group, shape = variant)) 
   scale_colour_manual(values = colours, guide = "none") +
   scale_shape_manual(values = variant_shapes, name = NULL, guide = guide_legend(override.aes = list(colour = ink))) +
   scale_x_continuous("Observed / expected terminal events", transform = pseudo_log, breaks = ratio_breaks,
-                     labels = function(x) comma(x), limits = c(0, max(1500, max(grid$x, na.rm = TRUE) * 1.2))) +
+                     labels = label_power_expr, limits = c(0, max(1500, max(grid$x, na.rm = TRUE) * 1.2))) +
   labs(y = "Minimum record length / window") +
-  theme(axis.text.y = element_text(size = dense_pt), legend.position = "bottom", strip.text = element_text(hjust = 0.5))
+  theme(axis.text.y = element_text(size = dense_pt * AXIS_TEXT_SCALE), legend.position = "bottom", strip.text = element_text(hjust = 0.5))
 figureS3_legend_notes <- c(
   paste0("A, Distance to the nearest record end against record length for strict matches of testable queries in eligible linear-genomic ",
          "records of all lengths. Both axes are logarithmic (distance pseudo-logarithmic). Hexagons: events per bin. Points: groups with few ",

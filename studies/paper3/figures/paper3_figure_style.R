@@ -4,7 +4,7 @@
 #   default   170 mm wide, at most 200 mm tall, 7-pt text, 8-pt bold tags A, B, C (preprint, Cell Press, OUP, BMC width)
 #   nature    183 mm wide, at most 170 mm tall, 7-pt text, 8-pt bold tags a, b, c
 #   plos_bmc  170 mm wide, at most 200 mm tall, 8-pt text, 10-pt bold tags A, B, C (also writes 600-dpi LZW TIFF files)
-# Text is Arial (sequences Courier New), black, axis titles not bold, units in parentheses, UK spelling.
+# Text is Arial (sequences Courier New), black, axis titles and tick labels 20% above their previous sizes, units in parentheses, UK spelling.
 # Hue is reserved for platforms. Evidence states, rules and thresholds use grey value, fill, outline style and shape.
 suppressPackageStartupMessages({
   library(ggplot2)
@@ -16,6 +16,9 @@ FIG_PROFILES <- list(
   default = list(width = 170, max_h = 200, base = 7, dense = 6.5, tag = 8, tags = "A", tiff = FALSE),
   nature = list(width = 183, max_h = 170, base = 7, dense = 6.5, tag = 8, tags = "a", tiff = FALSE),
   plos_bmc = list(width = 170, max_h = 200, base = 8, dense = 8, tag = 10, tags = "A", tiff = TRUE))
+# Axis titles are set 20% larger than the base text of the profile (8.4 pt at base 7), so they stand out from tick labels.
+AXIS_TITLE_SCALE <- 1.2
+AXIS_TEXT_SCALE <- 1.2
 FIG_PROFILE <- Sys.getenv("PAPER3_FIG_PROFILE", "default")
 if (!FIG_PROFILE %in% names(FIG_PROFILES)) stop("Unknown PAPER3_FIG_PROFILE: ", FIG_PROFILE)
 FIG <- FIG_PROFILES[[FIG_PROFILE]]
@@ -55,8 +58,8 @@ theme_paper3 <- function(base = FIG$base, family = FONT_SANS) {
   theme_classic(base_size = base, base_family = family, base_line_size = lw(0.5), base_rect_size = lw(0.5)) +
     theme(
       text = element_text(colour = ink),
-      axis.text = element_text(size = base, colour = ink),
-      axis.title = element_text(size = base, face = "plain"),
+      axis.text = element_text(size = base * AXIS_TEXT_SCALE, colour = ink),
+      axis.title = element_text(size = base * AXIS_TITLE_SCALE, face = "plain"),
       axis.line = element_line(colour = ink, linewidth = lw(0.5)),
       axis.ticks = element_line(colour = ink, linewidth = lw(0.5)),
       axis.ticks.length = unit(1, "mm"),

@@ -34,11 +34,14 @@ if (nrow(cases)) {
   cases$packet_identical <- verification$packet_identical
 }
 if (!dir.exists(output)) dir.create(output, recursive = TRUE)
-width_mm <- FIG$width
+outer_margin <- 2
+canvas_width_mm <- FIG$width
+width_mm <- canvas_width_mm - 2 * outer_margin
 case_pitch <- 61
 case_start <- 1
 height_mm <- max(20, case_start + case_pitch * max(1, nrow(cases)))
-stopifnot(height_mm <= FIG$max_h)
+canvas_height_mm <- height_mm + 2 * outer_margin
+stopifnot(canvas_height_mm <= FIG$max_h)
 query_names <- c(ILLUMINA_TRUSEQ_R2_adapter = "TruSeq R2 adapter", RAPID_adapter_forward = "Rapid adapter")
 display_query <- function(id) if (id %in% names(query_names)) unname(query_names[id]) else gsub("_", " ", sub("_forward$", "", id))
 platform_colour <- function(group) {
@@ -106,7 +109,7 @@ draw_case <- function(row, index, top) {
   strong <- c(rep(FALSE, nchar(left)), emphasis, rep(FALSE, nchar(right)))
   stopifnot(length(subject) == length(query), length(subject) <= 120)
   marker <- platform_colour(row$group)
-  pitch <- 2.4
+  pitch <- (width_mm - 24) / 60
   record_label <- if (row$display_orientation == "-") "Record (\u2212)" else "Record (+)"
   for (offset in seq(1, length(subject), by = 60)) {
     indices <- offset:min(length(subject), offset + 59)
@@ -130,25 +133,38 @@ draw_case <- function(row, index, top) {
   # Verification result of this case (every check is asserted above from record_case_verification.tsv).
   lines <- paste("Verified: exact full-length HSP of the searched query. The record sequence at these coordinates equals the HSP.",
     if (isTRUE(row$packet_identical)) "The archived record sequence is identical." else "")
-  write_text(trimws(lines), 0, top + 55, FIG$dense)
+  words <- strsplit(trimws(lines), " ", fixed = TRUE)[[1]]
+  wrapped <- character(); line <- ""
+  for (word in words) {
+    candidate <- if (line == "") word else paste(line, word)
+    if (text_width(candidate, FIG$dense) > width_mm && line != "") {
+      wrapped <- c(wrapped, line); line <- word
+    } else line <- candidate
+  }
+  wrapped <- c(wrapped, line)
+  stopifnot(length(wrapped) <= 2)
+  for (j in seq_along(wrapped)) write_text(wrapped[j], 0, top + 53.8 + 3.2 * (j - 1), FIG$dense)
 }
 
 draw_figure <- function() {
   grid.newpage()
   grid.rect(gp = gpar(fill = "white", col = NA))
+  pushViewport(viewport(x = unit(outer_margin, "mm"), y = unit(outer_margin, "mm"),
+                        width = unit(width_mm, "mm"), height = unit(height_mm, "mm"), just = c("left", "bottom")))
   if (nrow(cases)) {
     for (index in seq_len(nrow(cases))) draw_case(cases[index, ], index, case_start + case_pitch * (index - 1))
   } else {
     write_text("No record case was selected. The record-case selection tables list the category status.", 0, 6)
   }
+  popViewport()
 }
 
 for (extension in c("pdf", "png", if (FIG$tiff) "tiff")) {
   path <- file.path(output, paste0("paper3_figureS4.", extension))
   stopifnot(!file.exists(path))
-  if (extension == "pdf") grDevices::cairo_pdf(path, width = width_mm / 25.4, height = height_mm / 25.4)
-  else if (extension == "png") ragg::agg_png(path, width = width_mm, height = height_mm, units = "mm", res = 300)
-  else ragg::agg_tiff(path, width = width_mm, height = height_mm, units = "mm", res = 600, compression = "lzw")
+  if (extension == "pdf") grDevices::cairo_pdf(path, width = canvas_width_mm / 25.4, height = canvas_height_mm / 25.4)
+  else if (extension == "png") ragg::agg_png(path, width = canvas_width_mm, height = canvas_height_mm, units = "mm", res = 400)
+  else ragg::agg_tiff(path, width = canvas_width_mm, height = canvas_height_mm, units = "mm", res = 600, compression = "lzw")
   draw_figure()
   grDevices::dev.off()
 }
@@ -161,7 +177,7 @@ legend_notes <- c(
 files <- "paper3_figureS4.png"
 report <- list(contract = "publication_record_case_artwork_v1",
   source_manifest_sha256 = digest(file.path(input, "manifest.json"), algo = "sha256", file = TRUE),
-  figures = list(figureS4 = list(width_mm = width_mm, height_mm = height_mm, selected_cases = nrow(cases), profile = FIG_PROFILE,
+  figures = list(figureS4 = list(width_mm = canvas_width_mm, height_mm = canvas_height_mm, selected_cases = nrow(cases), profile = FIG_PROFILE,
     source_tables = c("record_cases.tsv", "record_case_verification.tsv"), legend_notes = legend_notes)),
   code_sha256 = digest(sub("^--file=", "", commandArgs()[grep("^--file=", commandArgs())][1]), algo = "sha256", file = TRUE),
   style_sha256 = digest(style_file, algo = "sha256", file = TRUE),
