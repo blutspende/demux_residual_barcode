@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Render the publication figures from one figure-source directory (contract publication_figure_sources_v1, written by the
-# figure_sources stage): plot_figures.R draws the R figures figure1-figure4 and figureS1-figureS3, plot_record_cases.R the
-# record cases (R name figureS4). The script verifies the source manifest, renders, checks both artwork manifests, writes
+# figure_sources stage): plot_figures.R draws the R figures figure1-figure4 and figureS1, figureS3, figureS4, plot_record_cases.R the
+# record cases (R name figureS2). The script verifies the source manifest, renders, checks both artwork manifests, writes
 # manuscript-numbered copies of the main figures and one figures_manifest.json.
 #
 # Manuscript numbering: the graphical abstract is Figure 1 (not rendered here), so figure1-figure4 are Figures 2-5;
-# supplementary figures follow the order of first citation: figureS1 = Figure S1, figureS4 (record cases) = Figure S2,
-# figureS3 = Figure S3, figureS2 = Figure S4. File names keep the R names; main figures are also copied to
+# supplementary figures follow the order of first citation: figureS1 = Figure S1, figureS2 (record cases) = Figure S2,
+# figureS3 = Figure S3, figureS4 = Figure S4. Supplementary file names follow publication numbering; main figures are also copied to
 # paper3_manuscript_FigureN.* (byte-identical).
 #
 # Every script sources paper3_figure_style.R (house style: profile from PAPER3_FIG_PROFILE, default 170 mm wide and at most
@@ -75,7 +75,7 @@ for record in (artwork, cases):
 for name, checksum in artwork["tables"].items():
     assert sha256(output / "tables" / name) == checksum, name
 figures = dict(artwork["figures"])
-figures["figureS4"] = dict(cases["figures"]["figureS4"], manuscript_figure="Figure S2")
+figures["figureS2"] = dict(cases["figures"]["figureS2"], manuscript_figure="Figure S2")
 assert sorted(figures) == ["figure1", "figure2", "figure3", "figure4", "figureS1", "figureS2", "figureS3", "figureS4"], sorted(figures)
 assert all(figure["height_mm"] <= 200 for figure in figures.values())
 copies = {}

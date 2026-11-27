@@ -124,7 +124,7 @@ class EngineTests(unittest.TestCase):
         if until is None:
             figures = json.loads(next(run.glob("*_figures/attempt_1/stage.json")).read_text())
             self.assertIn(str(SCRIPTS), figures["request"]["inputs"])
-            self.assertEqual(figures["summary"]["figures"]["figureS4"], "Figure S2")
+            self.assertEqual(figures["summary"]["figures"]["figureS2"], "Figure S2")
         again = run_study(config, run, until=until, mode="working", environ=environ)
         self.assertTrue(all(row["action"] == "skipped" for row in again["stages"]))
 

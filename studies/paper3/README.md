@@ -55,3 +55,32 @@ missing files; a file whose SHA-256 differs from its pin is refused unless
 it still matches its definition SHA-256 (recorded in `panel.json`). Published
 Illumina sequences require the notice "Oligonucleotide sequences © 2025
 Illumina, Inc. All rights reserved."
+
+## Publication revision of 27 November 2026 (release 1.0.1)
+
+The publication renderer retains the production analysis tables and updates the
+figures for manuscript v45 / supplement v41. PNG exports use 400 dpi. Supplementary
+filenames now match publication numbering: `paper3_figureS2.*` contains the record
+cases (Figure S2), and `paper3_figureS4.*` the control-precision figure (Figure S4).
+Figure 1 is produced manually in BioRender and is outside this renderer.
+
+Supplementary Data 1 is an export of an existing run, supplied with the manuscript.
+It contains one row per distinct search (19,717 in the production run), all 240
+positional combinations, and benchmark recovery by length at all three database
+sizes. Export it after rendering figures, using paths to the verified outputs:
+
+```bash
+python studies/paper3/export_supplementary_data.py \
+  --figure-sources RUN/24_figure_sources/attempt_4/output \
+  --search-status RUN/06_search/attempt_1/output/search/status.tsv \
+  --benchmark-by-length FIGURES/tables/tableS9_pair_recall_by_length.csv \
+  --output NEW_SUPPLEMENTARY_DATA_DIRECTORY
+```
+
+`RUN` and `FIGURES` denote the run and freshly rendered figure directories. The
+attempt numbers above identify the production run used for the paper; select the
+corresponding verified attempts for another run. The exporter refuses an existing
+output directory and writes CSV files, a README and input/output SHA-256 provenance.
+It does not rerun searches or analyses. The optional `--genbank-record AY738638.1.gb`
+includes the exact-version vector record checked during manuscript revision.
+Zenodo deposition and its persistent identifiers are completed separately.

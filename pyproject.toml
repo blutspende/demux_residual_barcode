@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/tidi42/database_residue_screen"
+Repository = "https://github.com/blutspende/demux_residual_barcode"
 
 [project.optional-dependencies]
 test = ["pytest>=7.4,<9", "build>=1,<2", "pyahocorasick>=2.1,<3"]

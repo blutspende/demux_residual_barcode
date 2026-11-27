@@ -200,13 +200,18 @@ class FigureBuildTests(FigureSourceCase):
         first, second = self.root / "figures", self.root / "figures-again"
         result = build_figures(self.sources, first, scripts=SCRIPTS, rscript=RSCRIPT)
         self.assertEqual(result["figures"], {"figure1": "Figure 2", "figure2": "Figure 3", "figure3": "Figure 4", "figure4": "Figure 5",
-                                             "figureS1": "Figure S1", "figureS2": "Figure S4", "figureS3": "Figure S3", "figureS4": "Figure S2"})
+                                             "figureS1": "Figure S1", "figureS2": "Figure S2", "figureS3": "Figure S3", "figureS4": "Figure S4"})
         manifest = json.loads((first / "figures_manifest.json").read_text())
         self.assertEqual(manifest["contract"], "publication_figures_v1")
         for name in ("paper3_figure1.png", "paper3_figureS4.pdf", "paper3_manuscript_Figure5.png", "tables/table1_reference_classes.csv",
                      "tables/tableS10_target_limit_summary.csv"):
             self.assertIn(name, manifest["files"])
         self.assertIn("content_sha256", manifest["files"]["paper3_figure1.pdf"])
+        # Deposited supplementary filenames must identify the same figure as the document.
+        cases = json.loads((first / "paper3_case_figure_manifest.json").read_text())
+        self.assertIn("figureS2", cases["figures"])
+        self.assertIn("paper3_figureS2.png", cases["files"])
+        self.assertEqual(manifest["figures"]["figureS4"]["manuscript_figure"], "Figure S4")
         artwork = json.loads((first / "paper3_figure_manifest.json").read_text())
         self.assertTrue(all(figure["height_mm"] <= 240 for figure in artwork["figures"].values()))
         build_figures(self.sources, second, scripts=SCRIPTS, rscript=RSCRIPT)

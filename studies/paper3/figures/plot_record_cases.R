@@ -11,7 +11,7 @@ input <- normalizePath(arguments[1])
 style_file <- normalizePath(arguments[2])
 output <- arguments[3]
 manifest <- fromJSON(file.path(input, "manifest.json"))
-# Record cases (figureS4, manuscript Figure S2) from one figure-source directory (contract publication_figure_sources_v1): the
+# Record cases (figureS2, manuscript Figure S2) from one figure-source directory (contract publication_figure_sources_v1): the
 # cases selected by the record_cases stage with their sequence-level verification. House style of paper3_figure_style.R: Arial
 # 7 pt, Courier New for sequences, panel tags A-C, no title or footer (the caption text is recorded as legend_notes), the match
 # on a light tint of the platform colour of the query and barcode or index segments on a darker tint, UK spelling.
@@ -160,7 +160,7 @@ draw_figure <- function() {
 }
 
 for (extension in c("pdf", "png", if (FIG$tiff) "tiff")) {
-  path <- file.path(output, paste0("paper3_figureS4.", extension))
+  path <- file.path(output, paste0("paper3_figureS2.", extension))
   stopifnot(!file.exists(path))
   if (extension == "pdf") grDevices::cairo_pdf(path, width = canvas_width_mm / 25.4, height = canvas_height_mm / 25.4)
   else if (extension == "png") ragg::agg_png(path, width = canvas_width_mm, height = canvas_height_mm, units = "mm", res = 400)
@@ -170,17 +170,17 @@ for (extension in c("pdf", "png", if (FIG$tiff) "tiff")) {
 }
 legend_notes <- c(
   "Deterministically selected strict matches of testable queries with exact-version local sequence verification.",
-  paste0("Record (\u2212) or (+): the record strand that carries the query in its searched orientation, with up to 50 nt of flank, clipped at ",
-         "stored record boundaries. Query: the searched query; dots mark positions outside the match. The match is set on a light tint of the ",
+  paste0("Record (\u2212) or (+): the record strand that carries the query in its searched orientation, in a window of at most 120 nt, with 11/43, 35/19 and 34/34 nt left/right flanks for A, B and C. Windows stop at ",
+         "stored record boundaries. Query: the canonical searched query; in A it is the reverse complement of the documented TruSeq Read 2 adapter; dots mark positions outside the match. The match is set on a light tint of the ",
          "platform colour of the query, and the barcode or index segment on a darker tint. Track: the record drawn to scale with the match ",
          "marker. Selection rules and complete case evidence: Table S8."))
-files <- "paper3_figureS4.png"
+files <- "paper3_figureS2.png"
 report <- list(contract = "publication_record_case_artwork_v1",
   source_manifest_sha256 = digest(file.path(input, "manifest.json"), algo = "sha256", file = TRUE),
-  figures = list(figureS4 = list(width_mm = canvas_width_mm, height_mm = canvas_height_mm, selected_cases = nrow(cases), profile = FIG_PROFILE,
+  figures = list(figureS2 = list(width_mm = canvas_width_mm, height_mm = canvas_height_mm, selected_cases = nrow(cases), profile = FIG_PROFILE,
     source_tables = c("record_cases.tsv", "record_case_verification.tsv"), legend_notes = legend_notes)),
   code_sha256 = digest(sub("^--file=", "", commandArgs()[grep("^--file=", commandArgs())][1]), algo = "sha256", file = TRUE),
   style_sha256 = digest(style_file, algo = "sha256", file = TRUE),
   files = setNames(lapply(files, function(name) digest(file.path(output, name), algo = "sha256", file = TRUE)), files),
-  pdf_files = "paper3_figureS4.pdf")
+  pdf_files = "paper3_figureS2.pdf")
 write_json(report, file.path(output, "paper3_case_figure_manifest.json"), auto_unbox = TRUE, pretty = TRUE)

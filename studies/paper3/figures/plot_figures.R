@@ -15,8 +15,8 @@ grDevices::pdf(NULL)
 # Paper 3 publication figures from one figure-source directory (contract publication_figure_sources_v1, written by the
 # figure_sources stage). Main figures: figure1 (framework and evidence states), figure2 (detection and breadth),
 # figure3 (positional context), figure4 (a priori testability and record cases); supplementary figures: figureS1
-# (query properties and alignment quality), figureS2 (Monte Carlo precision), figureS3 (positional robustness).
-# The record-case figure (figureS4) is drawn by plot_record_cases.R. No panel contains a table: lookup-style content is
+# (query properties and alignment quality), figureS4 (Monte Carlo precision), figureS3 (positional robustness).
+# The record-case figure (figureS2) is drawn by plot_record_cases.R. No panel contains a table: lookup-style content is
 # exported as CSV (tables/ inside the output directory) and every panel is drawn from the exported CSV.
 # House style (paper3_figure_style.R): one width per profile (170 mm by default), at most 200 mm tall, Arial 7 pt, panel tags
 # A, B, C without panel titles. Method text, filters, transformations and symbol definitions belong in the caption: they are
@@ -24,7 +24,7 @@ grDevices::pdf(NULL)
 # fill and outline style. Proportions carry 95% Clopper-Pearson intervals; control means carry the relative-entropy Hoeffding
 # interval of the Methods. UK spelling, units in parentheses, thousands separators, en dashes in ranges, true minus signs.
 # R object names stay figure1-figure4; the manuscript numbers them Figures 2-5 (the graphical abstract is Figure 1).
-# Exported CSV names carry the manuscript numbers (e.g. fig2B_* for figure1 panel B, figS4B_* for figureS2, tableS6_* for Table S6).
+# Exported CSV names carry the manuscript numbers (e.g. fig2B_* for figure1 panel B, figS4B_* for figureS4, tableS6_* for Table S6).
 arguments <- commandArgs(trailingOnly = TRUE)
 stopifnot(length(arguments) %in% c(3, 4))
 input <- normalizePath(arguments[1])
@@ -114,10 +114,10 @@ mm_segment <- function(x, y, xend, yend, colour = grey_dark, linewidth = lw(0.5)
 
 saved <- list()
 # Manuscript numbering: the graphical abstract is Figure 1, so the R figures figure1-figure4 are manuscript Figures 2-5.
-# Supplementary figures are numbered in the order of first citation: R figureS2 is Figure S4 and the record cases
-# (R figureS4, plot_record_cases.R) are Figure S2. File names keep the R names.
+# Supplementary figures are numbered in the order of first citation: R figureS4 is Figure S4 and the record cases
+# (R figureS2, plot_record_cases.R) are Figure S2. Supplementary filenames use publication numbering.
 manuscript_numbers <- c(figure1 = "Figure 2", figure2 = "Figure 3", figure3 = "Figure 4", figure4 = "Figure 5",
-                        figureS1 = "Figure S1", figureS2 = "Figure S4", figureS3 = "Figure S3")
+                        figureS1 = "Figure S1", figureS4 = "Figure S4", figureS3 = "Figure S3")
 save_figure <- function(name, plot, height, panels, source_tables, note, csv_tables = character(), legend_notes = character()) {
   if (selection != "all" && selection != name) return(invisible(NULL))
   if (height > FIG$max_h + 1e-6) stop(name, ": ", height, " mm exceeds the ", FIG$max_h, "-mm limit of profile ", FIG_PROFILE)
@@ -290,9 +290,9 @@ state_w <- 68
 tree_nodes <- data.frame(
   id = c("S0", "T1", "T2", "Q1", "Q2", "Q3", "Q4", "Q5", "U1", "U2", "L1", "L2", "L3", "L4", "L5", "L6"),
   label = c(paste0("Canonical parents (n = ", comma(counts$canonical_parents), ")"),
-            paste0("Score retainable at E = ", production_evalue, "\nand chance bound \u2264 ", informative_limit, "?"),
+            paste0("Score retained at E = ", production_evalue, ",\nexact copy recovered,\nand chance bound \u2264 ", informative_limit, "?"),
             paste0("Chance bound \u2264 ", testable_limit, "?"),
-            "Search complete?", "Raw HSPs > 0?", "Qualifying match?", "Reached target cap?", "Additional breadth resolved?",
+            "Search complete?", "Raw HSPs > 0?", "Qualifying match?", "Reached target limit?", "Additional breadth resolved?",
             state_label("Untestable, excluded", "untestable"), state_label("Chance-limited, excluded", "chance_limited"),
             state_label("Failed or incomplete, excluded", "failed_or_incomplete"), state_label("Raw zero", "raw_zero"),
             state_label("Endpoint non-positive", "endpoint_non_positive"),
@@ -303,7 +303,7 @@ tree_nodes <- data.frame(
         state_x, state_x, state_x, state_x, state_x, state_x, state_x, question_x),
   y = c(7, 17.5, 28, 37, 46, 57, 57, 69, 17.5, 28, 37, 46, 52.5, 61.5, 69, 79.5),
   w = c(question_w, question_w, question_w, question_w, question_w, question_w, cap_w, question_w, rep(state_w, 7), question_w),
-  h = c(6, 8, 6, 6, 6, 6, 6, 6, rep(6, 7), 6))
+  h = c(6, 11, 6, 6, 6, 6, 6, 6, rep(6, 7), 6))
 stopifnot(!anyNA(tree_nodes$label))
 tree_edges <- export_csv(data.frame(
   from = c("S0", "T1", "T1", "T2", "T2", "Q1", "Q1", "Q2", "Q2", "Q3", "Q3", "Q4", "Q4", "Q5", "Q5"),
@@ -349,7 +349,7 @@ tree_panel <- canvas_plot(tree_height, c(
        mm_text(tree_nodes$x, tree_nodes$y, tree_nodes$label, base_pt, hjust = 0.5)),
   bracket(13.5, 40, 2), bracket(43, 82.5, 3), tree_edge_layers))
 figure1_legend_notes <- c(
-  "A, The four steps. Untestable, chance-limited and incomplete searches leave every count. Record context defines the linear-genomic set.",
+  "A, The four steps. Untestable, chance-limited and incomplete searches are excluded from every count. Record context defines the linear-genomic set.",
   "B, Conceptual 24-nt examples. HSP: high-scoring segment pair. Two separate bars are two HSPs, each assessed alone. Every strict match is also a tolerant match.",
   paste0("C, Evidence states in the order of assessment, with the canonical parents (strict / tolerant) per end state. Dashed outlines mark excluded states, ",
          "white boxes counted non-positive states and grey boxes counted positive states. E: expected chance count of the search (E-value). ",
@@ -417,7 +417,7 @@ control_limits <- load_table("detection") %>% filter(population == "all_records"
   select(order, endpoint, control_lower, control_upper)
 detection_rows <- table1 %>% mutate(order = classes$order,
   facet = ifelse(platform == "Global union", "All platforms", platform),
-  row_name = ifelse(block == "Platform unions", "All classes", reference_class)) %>%
+  row_name = ifelse(block == "Platform unions", ifelse(platform == "Global union", "Global union", "Group"), reference_class)) %>%
   mutate(facet = factor(facet, levels = platform_levels)) %>%
   arrange(facet, block == "Platform unions", order) %>% mutate(y = rev(seq_len(n())))
 detection_points <- bind_rows(lapply(c("strict", "tolerant"), function(rule) {
@@ -466,7 +466,7 @@ detection_plot <- ggplot(filter(detection_points, testable_parents > 0)) +
   geom_point(data = legend_dummy, aes(x, y, shape = key), alpha = 0, inherit.aes = FALSE) +
   geom_text(data = untestable_rules, aes(x = 3, y = ypos, label = "not testable"), hjust = 0, size = fs(dense_pt), fontface = "italic",
             colour = grey_text) +
-  geom_text(data = untestable_rows, aes(x = 1, y = y, label = "not testable at this database size"), hjust = 0, size = fs(dense_pt),
+  geom_text(data = untestable_rows, aes(x = 1, y = y, label = "not testable"), hjust = 0, size = fs(dense_pt),
             fontface = "italic", colour = grey_text) +
   geom_text(data = row_info, aes(x = n_column_x, y = y, label = n_label), hjust = 0, size = fs(dense_pt)) +
   geom_text(data = data.frame(facet = factor(platform_levels[1], levels = platform_levels), y = top_y + 1.15),
@@ -595,7 +595,9 @@ invisible(export_csv(main_position %>% arrange(group, distance, accession_versio
             display = ifelse(as.character(group) %in% dense_groups, "ecdf", "points")), "fig4B_end_distances.csv"))
 sparse_y <- setNames(-0.17 * seq_along(sparse_groups), sparse_groups)
 sparse_points <- main_position %>% filter(as.character(group) %in% sparse_groups) %>%
-  mutate(part = "sparse", y = unname(sparse_y[as.character(group)]))
+  group_by(group) %>%
+  mutate(part = "sparse", y = unname(sparse_y[as.character(group)]) +
+           ((row_number() - 1) / pmax(n() - 1, 1) - 0.5) * ifelse(n() > 1, 0.07, 0)) %>% ungroup()
 dense_points <- main_position %>% filter(as.character(group) %in% dense_groups) %>% mutate(part = "ecdf")
 event_label <- function(group) {
   row <- position_totals[as.character(position_totals$group) == group, ]
@@ -613,17 +615,17 @@ curve_labels <- bind_rows(lapply(dense_groups, function(name) {
 }))
 if (nrow(curve_labels)) {
   curve_labels <- curve_labels %>% arrange(rise) %>%
-    mutate(first = row_number() == 1, x = ifelse(first, main_window * 1.4, pmax(q40, 1) * 1.8), y = ifelse(first, 0.8, 0.26),
-           hjust = 0, vjust = 0.5, part = "ecdf")
+    mutate(first = row_number() == 1, x = ifelse(first, distance_max * 0.95, pmax(q40, 1) * 1.8), y = ifelse(first, 0.10, 0.23),
+           hjust = ifelse(first, 1, 0), vjust = 0.5, part = "ecdf")
 }
 ecdf_breaks <- seq(0, 1, 0.25)
 distance_plot <- ggplot() +
   geom_vline(xintercept = main_window, linetype = "dashed", colour = grey_dark, linewidth = lw(0.5)) +
   stat_ecdf(data = dense_points, aes(distance, colour = group), geom = "step", pad = FALSE, linewidth = lw(0.75)) +
   geom_point(data = sparse_points, aes(distance, y, colour = group), size = 1.3, alpha = 0.9) +
-  geom_text(data = data.frame(part = "ecdf"), aes(x = main_window * 1.4, y = 0.55, label = paste0("W = ", comma(main_window), " nt")),
+  geom_text(data = data.frame(part = "ecdf"), aes(x = main_window * 1.4, y = 0.80, label = paste0("W = ", comma(main_window), " nt")),
             hjust = 0, size = fs(dense_pt)) +
-  (if (nrow(curve_labels)) geom_text(data = curve_labels, aes(x = x, y = y, label = label, hjust = hjust, vjust = vjust),
+  (if (nrow(curve_labels)) geom_text(data = curve_labels, aes(x = x, y = y, label = label, hjust = hjust, vjust = vjust, colour = group),
                                      size = fs(dense_pt))) +
   facet_grid(factor(part, levels = c("ecdf", "sparse")) ~ ., scales = "free_y", space = "free_y") +
   scale_colour_manual(values = colours, guide = "none") +
@@ -1289,19 +1291,19 @@ precision_status <- ggplot(precision_final, aes(cell, group, fill = ratio)) +
     "tolerant / breadth" = "Tolerant\nbreadth", "tolerant / detection" = "Tolerant\ndetection")) +
   labs(x = NULL, y = NULL) +
   theme(axis.line = element_blank(), axis.ticks = element_blank(), legend.position = "bottom", strip.text = element_text(hjust = 0.5))
-figureS2_legend_notes <- c(testable_control_note,
+figureS4_legend_notes <- c(testable_control_note,
   paste0("A, All-record population, shown separately for the four platform groups. Control means at each declared draw prefix ",
          "with their Monte Carlo intervals. Filled markers: conditional bound. Open markers: ",
          "resolved-subset diagnostic. Lines: the final-parent cohort followed back through the prefixes (dotted: strict, dashed: tolerant). ",
          "Breadth uses a pseudo-logarithmic axis. Y scales differ between panels."),
   paste0("B, Final precision targets. ", precision_count_label(filter(precision_counts, condition == "all_conditions")),
          " Met: half-width \u2264 target. Tile text: status and half-width / target. Grey value: the same ratio on a logarithmic scale. Values: Table S6."))
-figureS2_heights <- c(92, 82)
-figure_s3 <- assemble(precision_plot, precision_status, heights = figureS2_heights)
-save_figure("figureS2", figure_s3, sum(figureS2_heights) + 4, c("Prefix precision", "Precision targets"),
+figureS4_heights <- c(92, 82)
+figure_s3 <- assemble(precision_plot, precision_status, heights = figureS4_heights)
+save_figure("figureS4", figure_s3, sum(figureS4_heights) + 4, c("Prefix precision", "Precision targets"),
   c("control_draw_qc.tsv", "control_parent_qc.tsv", "control_qc_summary.tsv", "precision.tsv", "precision_fixed_cohort.tsv"),
   paste0("All final-stage ", precision_count_label(precision_counts), " Intervals describe conditional Monte Carlo error."),
-  c("tableS6_control_quality.csv", "figS4B_precision_tiles.csv"), legend_notes = figureS2_legend_notes)
+  c("tableS6_control_quality.csv", "figS4B_precision_tiles.csv"), legend_notes = figureS4_legend_notes)
 
 # ---------------------------------------------------------------------------------------------
 # Figure S3. Positional robustness
